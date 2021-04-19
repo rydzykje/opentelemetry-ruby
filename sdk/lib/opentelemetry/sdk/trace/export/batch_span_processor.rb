@@ -52,6 +52,7 @@ module OpenTelemetry
                          start_thread_on_boot: String(ENV['OTEL_RUBY_BSP_START_THREAD_ON_BOOT']) !~ /false/i,
                          metrics_reporter: nil)
             raise ArgumentError if max_export_batch_size > max_queue_size
+            raise ArgumentError, "exporter #{exporter.inspect} does not appear to be a valid exporter" unless Common::Utilities.valid_exporter?(exporter)
 
             @exporter = exporter
             @exporter_timeout_seconds = exporter_timeout / 1000.0
@@ -114,7 +115,7 @@ module OpenTelemetry
               return result_code unless result_code == SUCCESS
             end
 
-            SUCCESS
+            @exporter.force_flush(timeout: OpenTelemetry::Common::Utilities.maybe_timeout(timeout, start_time))
           ensure
             # Unshift the remaining spans if we timed out. We drop excess spans from
             # the snapshot because they're older than any spans in the spans buffer.
@@ -177,6 +178,9 @@ module OpenTelemetry
             @pid = pid
             spans.clear
             @thread = restart_thread ? Thread.new { work } : nil
+          rescue ThreadError => e
+            @metrics_reporter.add_to_counter('otel.bsp.error', labels: { 'reason' => 'ThreadError' })
+            OpenTelemetry.handle_error(exception: e, message: 'unexpected error in BatchSpanProcessor#reset_on_fork')
           end
 
           def export_batch(batch, timeout: @exporter_timeout_seconds)

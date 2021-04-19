@@ -46,8 +46,37 @@ module OpenTelemetry
         placeholder
       end
 
+      # Truncates a string if it exceeds the size provided.
+      #
+      # @param [String] string The string to be truncated
+      # @param [Integer] size The max size of the string
+      #
+      # @return [String]
+      def truncate(string, size)
+        string.size > size ? "#{string[0...size - 3]}..." : string
+      end
+
       def untraced
         OpenTelemetry::Trace.with_span(OpenTelemetry::Trace::Span.new) { yield }
+      end
+
+      # Returns a URL string with userinfo removed.
+      #
+      # @param [String] url The URL string to cleanse.
+      #
+      # @return [String] the cleansed URL.
+      def cleanse_url(url)
+        cleansed_url = URI.parse(url)
+        cleansed_url.password = nil
+        cleansed_url.user = nil
+        cleansed_url.to_s
+      rescue URI::Error
+        url
+      end
+
+      # Returns true if exporter is a valid exporter.
+      def valid_exporter?(exporter)
+        exporter && %i[export shutdown force_flush].all? { |m| exporter.respond_to?(m) }
       end
     end
   end

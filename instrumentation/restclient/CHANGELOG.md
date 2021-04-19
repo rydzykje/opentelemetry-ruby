@@ -1,5 +1,15 @@
 # Release History: opentelemetry-instrumentation-restclient
 
+### v0.16.0 / 2021-03-17
+
+* FIXED: Remove passwords from http.url 
+* FIXED: Example scripts now reference local common lib 
+* DOCS: Replace Gitter with GitHub Discussions 
+
+### v0.15.0 / 2021-02-18
+
+* (No significant changes)
+
 ### v0.14.0 / 2021-02-03
 
 * BREAKING CHANGE: Replace getter and setter callables and remove rack specific propagators 

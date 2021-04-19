@@ -1,5 +1,20 @@
 # Release History: opentelemetry-exporter-otlp
 
+### v0.16.0 / 2021-03-17
+
+* BREAKING CHANGE: Implement Exporter#force_flush 
+
+* ADDED: Implement Exporter#force_flush 
+* FIXED: Rescue socket err in otlp exporter to prevent failures unable to  connect 
+* DOCS: Replace Gitter with GitHub Discussions 
+
+### v0.15.0 / 2021-02-18
+
+* BREAKING CHANGE: Streamline processor pipeline 
+
+* ADDED: Add otlp exporter hooks 
+* FIXED: Streamline processor pipeline 
+
 ### v0.14.0 / 2021-02-03
 
 * (No significant changes)

@@ -1,6 +1,6 @@
 # OpenTelemetry Ruby
 
-[![Gitter chat][gitter-image]][gitter-url]
+[![Slack channel][slack-image]][slack-url]
 [![CI][ci-image]][ci-image]
 [![Apache License][license-image]][license-image]
 
@@ -65,7 +65,7 @@ followed by:
 bundle install
 ```
 
-To install development versions of these packages, follow the "Developer Setup" section (below).
+To install development versions of these packages, follow the [Docker Setup instructions](CONTRIBUTING.md#docker-setup).
 
 ## Quick Start
 
@@ -97,10 +97,29 @@ See the [API Documentation](https://open-telemetry.github.io/opentelemetry-ruby/
 detail, and the [opentelemetry examples][examples-github] for a complete example including
 context propagation.
 
+## Instrumentation Libraries
+
+This repository contains instrumentation libraries for many popular Ruby
+gems, including Rails, Rack, Sinatra, and others, so you can start
+using OpenTelemetry with minimal changes to your application. See the
+[instrumentation README](instrumentation/) for more.
+
+## Who's using OpenTelemetry Ruby?
+
+OpenTelemetry Ruby is in use by a number of companies, including:
+
+- [Heroku](https://heroku.com)
+- [Fulcrum](https://www.fulcrumapp.com/)
+- [Puppet](https://puppet.com/)
+- [Shopify](https://shopify.com)
+- [TableCheck](https://www.tablecheck.com/)
+
+If you would like to add your name to this list, please feel free to submit a pull request.
+
 ## Useful links
 
 - For more information on OpenTelemetry, visit: <https://opentelemetry.io/>
-- For help or feedback on this project, join us on [gitter][gitter-url].
+- For help or feedback on this project, join us in [GitHub Discussions][discussions-url].
 
 ## License
 
@@ -108,11 +127,12 @@ Apache 2.0 - See [LICENSE][license-url] for more information.
 
 [ci-image]: https://github.com/open-telemetry/opentelemetry-ruby/workflows/CI/badge.svg?event=push
 [examples-github]: https://github.com/open-telemetry/opentelemetry-ruby/tree/main/examples
-[gitter-image]: https://badges.gitter.im/open-telemetry/opentelemetry-ruby.svg
-[gitter-url]: https://gitter.im/open-telemetry/opentelemetry-ruby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
 [issues-good-first-issue]: https://github.com/open-telemetry/opentelemetry-ruby/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
 [issues-help-wanted]: https://github.com/open-telemetry/opentelemetry-ruby/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22
 [license-image]: https://img.shields.io/badge/license-Apache_2.0-green.svg?style=flat
 [license-url]: https://github.com/open-telemetry/opentelemetry-ruby/blob/main/LICENSE
 [ruby-sig]: https://github.com/open-telemetry/community#ruby-sig
 [opentelemetry-instrumentation-all-publishing]: https://github.com/open-telemetry/opentelemetry-ruby/tree/main/instrumentation/all#publishing
+[slack-image]: https://img.shields.io/badge/slack-@cncf/otel/ruby-brightgreen.svg?logo=slack
+[slack-url]: https://cloud-native.slack.com/archives/C01NWKKMKMY
+[discussions-url]: https://github.com/open-telemetry/opentelemetry-ruby/discussions

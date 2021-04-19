@@ -19,6 +19,9 @@ module OpenTelemetry
           defined?(::Mysql2)
         end
 
+        option :peer_service, default: nil, validate: :string
+        option :enable_sql_obfuscation, default: false, validate: :boolean
+
         private
 
         def require_dependencies

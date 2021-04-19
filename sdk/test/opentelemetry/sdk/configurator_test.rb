@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 require 'test_helper'
+require 'opentelemetry/exporter/jaeger'
 
 describe OpenTelemetry::SDK::Configurator do
   let(:configurator) { OpenTelemetry::SDK::Configurator.new }
@@ -110,50 +111,47 @@ describe OpenTelemetry::SDK::Configurator do
         configurator.configure
 
         _(OpenTelemetry.baggage).must_be_instance_of(
-          OpenTelemetry::SDK::Baggage::Manager
+          OpenTelemetry::Baggage::Manager
         )
       end
     end
 
-    describe 'injectors' do
+    describe 'propagators' do
       it 'defaults to trace context and baggage' do
         configurator.configure
 
-        expected_injectors = [
-          OpenTelemetry::Trace::Propagation::TraceContext.text_map_injector,
-          OpenTelemetry::Baggage::Propagation.text_map_injector
+        expected_propagators = [
+          OpenTelemetry::Trace::Propagation::TraceContext.text_map_propagator,
+          OpenTelemetry::Baggage::Propagation.text_map_propagator
         ]
 
-        _(injectors_for(OpenTelemetry.propagation)).must_equal(expected_injectors)
+        _(propagators_for(OpenTelemetry.propagation)).must_equal(expected_propagators)
       end
 
       it 'is user settable' do
-        injector = OpenTelemetry::Context::Propagation::NoopInjector.new
-        configurator.injectors = [injector]
+        propagator = OpenTelemetry::Context::Propagation::NoopTextMapPropagator.new
+        configurator.propagators = [propagator]
         configurator.configure
 
-        _(injectors_for(OpenTelemetry.propagation)).must_equal([injector])
-      end
-    end
-
-    describe '#extractors' do
-      it 'defaults to trace context and baggage' do
-        configurator.configure
-
-        expected_extractors = [
-          OpenTelemetry::Trace::Propagation::TraceContext.text_map_extractor,
-          OpenTelemetry::Baggage::Propagation.text_map_extractor
-        ]
-
-        _(extractors_for(OpenTelemetry.propagation)).must_equal(expected_extractors)
+        _(OpenTelemetry.propagation).must_equal(propagator)
       end
 
-      it 'is user settable' do
-        extractor = OpenTelemetry::Context::Propagation::NoopExtractor.new
-        configurator.extractors = [extractor]
-        configurator.configure
+      it 'can be set by environment variable' do
+        with_env('OTEL_PROPAGATORS' => 'baggage') do
+          configurator.configure
+        end
 
-        _(extractors_for(OpenTelemetry.propagation)).must_equal([extractor])
+        _(OpenTelemetry.propagation).must_equal(OpenTelemetry::Baggage::Propagation.text_map_propagator)
+      end
+
+      it 'defaults to none with invalid env var' do
+        with_env('OTEL_PROPAGATORS' => 'unladen_swallow') do
+          configurator.configure
+        end
+
+        _(OpenTelemetry.propagation).must_be_instance_of(
+          Context::Propagation::NoopTextMapPropagator
+        )
       end
     end
 
@@ -176,11 +174,11 @@ describe OpenTelemetry::SDK::Configurator do
     end
 
     describe 'span processors' do
-      it 'defaults to SimpleSpanProcessor w/ ConsoleSpanExporter' do
+      it 'defaults to NoopSpanProcessor if no valid exporter is available' do
         configurator.configure
 
         _(OpenTelemetry.tracer_provider.active_span_processor).must_be_instance_of(
-          OpenTelemetry::SDK::Trace::Export::SimpleSpanProcessor
+          OpenTelemetry::SDK::Trace::NoopSpanProcessor
         )
       end
 
@@ -197,14 +195,51 @@ describe OpenTelemetry::SDK::Configurator do
           OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor
         )
       end
+
+      it 'can be set by environment variable' do
+        with_env('OTEL_TRACES_EXPORTER' => 'jaeger') do
+          configurator.configure
+        end
+
+        _(OpenTelemetry.tracer_provider.active_span_processor).must_be_instance_of(
+          OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor
+        )
+        _(OpenTelemetry.tracer_provider.active_span_processor.instance_variable_get(:@exporter)).must_be_instance_of(
+          OpenTelemetry::Exporter::Jaeger::CollectorExporter
+        )
+      end
+
+      it 'accepts "none" as an environment variable value' do
+        with_env('OTEL_TRACES_EXPORTER' => 'none') do
+          configurator.configure
+        end
+
+        _(OpenTelemetry.tracer_provider.active_span_processor).must_be_instance_of(
+          OpenTelemetry::SDK::Trace::NoopSpanProcessor
+        )
+      end
+
+      it 'accepts "console" as an environment variable value' do
+        with_env('OTEL_TRACES_EXPORTER' => 'console') do
+          configurator.configure
+        end
+
+        _(OpenTelemetry.tracer_provider.active_span_processor).must_be_instance_of(
+          OpenTelemetry::SDK::Trace::Export::SimpleSpanProcessor
+        )
+        _(OpenTelemetry.tracer_provider.active_span_processor.instance_variable_get(:@span_exporter)).must_be_instance_of(
+          OpenTelemetry::SDK::Trace::Export::ConsoleSpanExporter
+        )
+      end
     end
 
     describe 'instrumentation installation' do
       before do
-        OpenTelemetry.instance_variable_set(:@instrumentation_registry, nil)
+        OpenTelemetry::Instrumentation.instance_variable_set(:@registry, nil)
         TestInstrumentation = Class.new(OpenTelemetry::Instrumentation::Base) do
           install { 1 + 1 }
           present { true }
+          option :opt, default: false, validate: :boolean
         end
       end
 
@@ -213,7 +248,7 @@ describe OpenTelemetry::SDK::Configurator do
       end
 
       it 'installs single instrumentation' do
-        registry = OpenTelemetry.instrumentation_registry
+        registry = OpenTelemetry::Instrumentation.registry
         instrumentation = registry.lookup('TestInstrumentation')
         _(instrumentation).wont_be_nil
         _(instrumentation).wont_be(:installed?)
@@ -224,7 +259,7 @@ describe OpenTelemetry::SDK::Configurator do
       end
 
       it 'installs all' do
-        registry = OpenTelemetry.instrumentation_registry
+        registry = OpenTelemetry::Instrumentation.registry
         instrumentation = registry.lookup('TestInstrumentation')
         _(instrumentation).wont_be_nil
         _(instrumentation).wont_be(:installed?)
@@ -236,11 +271,11 @@ describe OpenTelemetry::SDK::Configurator do
     end
   end
 
-  def extractors_for(propagator)
-    propagator.instance_variable_get(:@extractors) || propagator.instance_variable_get(:@extractor)
-  end
-
-  def injectors_for(propagator)
-    propagator.instance_variable_get(:@injectors) || propagator.instance_variable_get(:@injector)
+  def propagators_for(propagator)
+    if propagator.instance_of? Context::Propagation::CompositeTextMapPropagator
+      propagator.instance_variable_get(:@propagators)
+    else
+      [propagator]
+    end
   end
 end

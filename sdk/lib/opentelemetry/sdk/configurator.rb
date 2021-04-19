@@ -15,14 +15,12 @@ module OpenTelemetry
 
       private_constant :USE_MODE_UNSPECIFIED, :USE_MODE_ONE, :USE_MODE_ALL
 
-      attr_writer :logger, :extractors, :injectors, :error_handler,
-                  :id_generator
+      attr_writer :logger, :propagators, :error_handler, :id_generator
 
       def initialize
         @instrumentation_names = []
         @instrumentation_config_map = {}
-        @injectors = nil
-        @extractors = nil
+        @propagators = nil
         @span_processors = []
         @use_mode = USE_MODE_UNSPECIFIED
         @resource = Resources::Resource.default
@@ -136,48 +134,61 @@ module OpenTelemetry
       def install_instrumentation
         case @use_mode
         when USE_MODE_ONE
-          OpenTelemetry.instrumentation_registry.install(@instrumentation_names, @instrumentation_config_map)
+          OpenTelemetry::Instrumentation.registry.install(@instrumentation_names, @instrumentation_config_map)
         when USE_MODE_ALL
-          OpenTelemetry.instrumentation_registry.install_all(@instrumentation_config_map)
+          OpenTelemetry::Instrumentation.registry.install_all(@instrumentation_config_map)
         end
       end
 
       def configure_span_processors
-        processors = @span_processors.empty? ? [default_span_processor] : @span_processors
+        processors = @span_processors.empty? ? [wrapped_exporter_from_env].compact : @span_processors
         processors.each { |p| tracer_provider.add_span_processor(p) }
       end
 
-      def default_span_processor
-        Trace::Export::SimpleSpanProcessor.new(
-          Trace::Export::ConsoleSpanExporter.new
-        )
-      end
-
-      def configure_propagation
-        OpenTelemetry.propagation = create_propagator(@injectors || default_injectors,
-                                                      @extractors || default_extractors)
-      end
-
-      def create_propagator(injectors, extractors)
-        if injectors.size > 1 || extractors.size > 1
-          Context::Propagation::CompositePropagator.new(injectors, extractors)
+      def wrapped_exporter_from_env
+        exporter = ENV.fetch('OTEL_TRACES_EXPORTER', 'otlp')
+        case exporter
+        when 'none' then nil
+        when 'otlp' then fetch_exporter(exporter, 'OpenTelemetry::Exporter::OTLP::Exporter')
+        when 'jaeger' then fetch_exporter(exporter, 'OpenTelemetry::Exporter::Jaeger::CollectorExporter')
+        when 'zipkin' then fetch_exporter(exporter, 'OpenTelemetry::Exporter::Zipkin::Exporter')
+        when 'console' then Trace::Export::SimpleSpanProcessor.new(Trace::Export::ConsoleSpanExporter.new)
         else
-          Context::Propagation::Propagator.new(injectors, extractors)
+          OpenTelemetry.logger.warn "The #{exporter} exporter is unknown and cannot be configured, spans will not be exported"
+          nil
         end
       end
 
-      def default_injectors
-        [
-          OpenTelemetry::Trace::Propagation::TraceContext.text_map_injector,
-          OpenTelemetry::Baggage::Propagation.text_map_injector
-        ]
+      def configure_propagation # rubocop:disable Metrics/CyclomaticComplexity
+        propagators = ENV.fetch('OTEL_PROPAGATORS', 'tracecontext,baggage').split(',').uniq.collect do |propagator|
+          case propagator
+          when 'tracecontext' then OpenTelemetry::Trace::Propagation::TraceContext.text_map_propagator
+          when 'baggage' then OpenTelemetry::Baggage::Propagation.text_map_propagator
+          when 'b3' then fetch_propagator(propagator, 'OpenTelemetry::Propagator::B3::Single')
+          when 'b3multi' then fetch_propagator(propagator, 'OpenTelemetry::Propagator::B3::Multi', 'b3')
+          when 'jaeger' then fetch_propagator(propagator, 'OpenTelemetry::Propagator::Jaeger')
+          when 'xray' then fetch_propagator(propagator, 'OpenTelemetry::Propagator::XRay')
+          when 'ottrace' then fetch_propagator(propagator, 'OpenTelemetry::Propagator::OTTrace')
+          else
+            OpenTelemetry.logger.warn "The #{propagator} propagator is unknown and cannot be configured"
+            Context::Propagation::NoopTextMapPropagator.new
+          end
+        end
+        OpenTelemetry.propagation = Context::Propagation::CompositeTextMapPropagator.compose_propagators((@propagators || propagators).compact)
       end
 
-      def default_extractors
-        [
-          OpenTelemetry::Trace::Propagation::TraceContext.text_map_extractor,
-          OpenTelemetry::Baggage::Propagation.text_map_extractor
-        ]
+      def fetch_propagator(name, class_name, gem_suffix = name)
+        Kernel.const_get(class_name).text_map_propagator
+      rescue NameError
+        OpenTelemetry.logger.warn "The #{name} propagator cannot be configured - please add opentelemetry-propagator-#{gem_suffix} to your Gemfile"
+        nil
+      end
+
+      def fetch_exporter(name, class_name)
+        Trace::Export::BatchSpanProcessor.new(Kernel.const_get(class_name).new)
+      rescue NameError
+        OpenTelemetry.logger.warn "The #{name} exporter cannot be configured - please add opentelemetry-exporter-#{name} to your Gemfile, spans will not be exported"
+        nil
       end
     end
   end

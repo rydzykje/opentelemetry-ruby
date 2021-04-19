@@ -35,6 +35,8 @@ describe OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor do
     end
 
     def shutdown(timeout: nil); end
+
+    def force_flush(timeout: nil); end
   end
 
   class TestSpan
@@ -69,6 +71,14 @@ describe OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor do
           BatchSpanProcessor.new(TestExporter.new)
         end
       end
+    end
+
+    it 'raises if exporter is nil' do
+      _(-> { BatchSpanProcessor.new(nil) }).must_raise(ArgumentError)
+    end
+
+    it 'raises if exporter is not an exporter' do
+      _(-> { BatchSpanProcessor.new(exporter: TestExporter.new) }).must_raise(ArgumentError)
     end
 
     it 'sets parameters from the environment' do
@@ -292,6 +302,21 @@ describe OpenTelemetry::SDK::Trace::Export::BatchSpanProcessor do
       BatchSpanProcessor.new(exporter,
                              max_queue_size: 10,
                              max_export_batch_size: 3)
+    end
+
+    it 'when ThreadError is raised it handles it gracefully' do
+      parent_pid = bsp.instance_variable_get(:@pid)
+      parent_work_thread_id = bsp.instance_variable_get(:@thread).object_id
+      Process.stub(:pid, parent_pid + rand(1..10)) do
+        Thread.stub(:new, -> { raise ThreadError }) do
+          bsp.on_finish(TestSpan.new)
+        end
+
+        current_pid = bsp.instance_variable_get(:@pid)
+        current_work_thread_id = bsp.instance_variable_get(:@thread).object_id
+        _(parent_pid).wont_equal current_pid
+        _(parent_work_thread_id).must_equal current_work_thread_id
+      end
     end
 
     describe 'when a process fork occurs' do

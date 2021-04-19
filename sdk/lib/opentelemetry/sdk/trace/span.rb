@@ -64,6 +64,9 @@ module OpenTelemetry
         #
         # @param [String] key
         # @param [String, Boolean, Numeric, Array<String, Numeric, Boolean>] value
+        #   Values must be non-nil and (array of) string, boolean or numeric type.
+        #   Array values must not contain nil elements and all elements must be of
+        #   the same basic type (string, numeric, boolean).
         #
         # @return [self] returns itself
         def set_attribute(key, value)
@@ -82,6 +85,34 @@ module OpenTelemetry
         end
         alias []= set_attribute
 
+        # Add attributes
+        #
+        # Note that the OpenTelemetry project
+        # {https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/data-semantic-conventions.md
+        # documents} certain "standard attributes" that have prescribed semantic
+        # meanings.
+        #
+        # @param [Hash{String => String, Numeric, Boolean, Array<String, Numeric, Boolean>}] attributes
+        #   Values must be non-nil and (array of) string, boolean or numeric type.
+        #   Array values must not contain nil elements and all elements must be of
+        #   the same basic type (string, numeric, boolean).
+        #
+        # @return [self] returns itself
+        def add_attributes(attributes)
+          super
+          @mutex.synchronize do
+            if @ended
+              OpenTelemetry.logger.warn('Calling add_attributes on an ended Span.')
+            else
+              @attributes ||= {}
+              @attributes.merge!(attributes)
+              trim_span_attributes(@attributes)
+              @total_recorded_attributes += attributes.size
+            end
+          end
+          self
+        end
+
         # Add an Event to a {Span}.
         #
         # Example:
@@ -96,13 +127,13 @@ module OpenTelemetry
         # @param [String] name Name of the event.
         # @param [optional Hash{String => String, Numeric, Boolean, Array<String, Numeric, Boolean>}] attributes
         #   One or more key:value pairs, where the keys must be strings and the
-        #   values may be string, boolean or numeric type.
+        #   values may be (array of) string, boolean or numeric type.
         # @param [optional Time] timestamp Optional timestamp for the event.
         #
         # @return [self] returns itself
         def add_event(name, attributes: nil, timestamp: nil)
           super
-          event = Event.new(name: name, attributes: attributes, timestamp: timestamp || Time.now)
+          event = Event.new(name: name, attributes: truncate_attribute_values(attributes), timestamp: timestamp || Time.now)
 
           @mutex.synchronize do
             if @ended
@@ -285,7 +316,16 @@ module OpenTelemetry
 
           excess = attrs.size - @trace_config.max_attributes_count
           excess.times { attrs.shift } if excess.positive?
+          truncate_attribute_values(attrs)
           nil
+        end
+
+        def truncate_attribute_values(attrs)
+          return if attrs.nil?
+
+          max_attributes_length = @trace_config.max_attributes_length
+          attrs.each { |key, value| attrs[key] = OpenTelemetry::Common::Utilities.truncate(value, max_attributes_length) } if max_attributes_length
+          attrs
         end
 
         def trim_links(links, max_links_count, max_attributes_per_link) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity

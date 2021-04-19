@@ -1,5 +1,16 @@
 # Release History: opentelemetry-instrumentation-all
 
+### v0.16.0 / 2021-03-17
+
+* ADDED: Instrument http gem 
+* ADDED: Instrument lmdb gem 
+* FIXED: Example scripts now reference local common lib 
+* DOCS: Replace Gitter with GitHub Discussions 
+
+### v0.15.0 / 2021-02-18
+
+* ADDED: Instrument http client gem 
+
 ### v0.14.0 / 2021-02-03
 
 * (No significant changes)
